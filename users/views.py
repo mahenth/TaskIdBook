@@ -8,9 +8,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import User, UserProfile
-from .serializers import UserSerializer, UserProfileSerializer, CustomTokenObtainPairSerializer, UserProfileDetailSerializer
+from .serializers import UserSerializer, UserProfileSerializer, CustomTokenObtainPairSerializer, UserProfileDetailSerializer, AdminUserBookingSummarySerializer
 from bookings.models import Booking # Import Booking model here
 from rest_framework.decorators import action
+from datetime import datetime
+from rest_framework.permissions import IsAdminUser
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -90,3 +92,34 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         data = serializer.data
         data['total_bookings'] = total_bookings
         return Response(data)
+    
+
+class AdminBookingSummaryViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated, IsAdminUser] # Only authenticated admins
+
+    def list(self, request):
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+
+        if not all([start_date_str, end_date_str]):
+            return Response({"detail": "Please provide both 'start_date' and 'end_date' query parameters (YYYY-MM-DD)."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({"detail": "Invalid date format. Use YYYY-MM-DD."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Filter bookings by date range
+        # Annotate users with the count of their bookings within that range
+        # filter(bookings__isnull=False) ensures only users with bookings in the range are included
+        users_with_bookings = User.objects.filter(
+            bookings__check_in_date__range=[start_date, end_date]
+        ).annotate(
+            total_bookings=Count('bookings')
+        ).order_by('id') # Order for consistent results
+
+        serializer = AdminUserBookingSummarySerializer(users_with_bookings, many=True)
+        return Response(serializer.data)
