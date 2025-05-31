@@ -52,7 +52,3 @@ class AdminUserBookingSummarySerializer(serializers.Serializer):
     username = serializers.CharField()
     email = serializers.EmailField()
     total_bookings = serializers.IntegerField() # This will hold the annotated count
-
-    # Optional: If you want to include profile details directly
-    # profile_address = serializers.CharField(source='profile.address', read_only=True)
-    # profile_gender = serializers.CharField(source='profile.gender', read_only=True)
